@@ -6,5 +6,8 @@
 #define ATTR_HPP
 
 
+namespace attr {
+
+}
 
 #endif //ATTR_HPP

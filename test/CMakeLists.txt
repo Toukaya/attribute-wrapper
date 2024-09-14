@@ -18,5 +18,6 @@ enable_testing()
 
 find_package(Catch2 3 REQUIRED)
 
-add_executable(test attr_test.cpp)
+add_executable(test attr_test.cpp
+        ../include/attr/optional.hpp)
 target_link_libraries(test PRIVATE Catch2::Catch2WithMain attr)
