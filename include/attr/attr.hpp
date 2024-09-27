@@ -256,7 +256,7 @@ namespace attr {
         inline void construct_value(Args&&... args)
         { ::new (std::addressof(val)) value_type(std::forward<Args>(args)...); }
 
-        inline T* get_value_address() noexcept(not EXCEPTIONS_ENABLED)
+        inline T* get_value_address() noexcept(!EXCEPTIONS_ENABLED)
         {
             if constexpr (EXCEPTIONS_ENABLED) {
                 if(!engaged)
@@ -267,7 +267,7 @@ namespace attr {
             return reinterpret_cast<T*>(std::addressof(val));
         }
 
-        inline const T* get_value_address() const noexcept(not EXCEPTIONS_ENABLED)
+        inline const T* get_value_address() const noexcept(!EXCEPTIONS_ENABLED)
         {
             if constexpr (EXCEPTIONS_ENABLED) {
                 if(!engaged)
@@ -278,7 +278,7 @@ namespace attr {
             return reinterpret_cast<T*>(std::addressof(val));
         }
 
-        inline value_type& get_value_ref() noexcept(not EXCEPTIONS_ENABLED)
+        inline value_type& get_value_ref() noexcept(!EXCEPTIONS_ENABLED)
         {
             if constexpr (EXCEPTIONS_ENABLED) {
                 if(!engaged)
@@ -289,7 +289,7 @@ namespace attr {
             return *static_cast<value_type *>(std::addressof(val));
         }
 
-        inline const value_type& get_value_ref() const noexcept(not EXCEPTIONS_ENABLED)
+        inline const value_type& get_value_ref() const noexcept(!EXCEPTIONS_ENABLED)
         {
             if constexpr (EXCEPTIONS_ENABLED) {
                 if(!engaged)
@@ -300,7 +300,7 @@ namespace attr {
             return *static_cast<value_type *>(std::addressof(val));
         }
 
-        inline value_type&& get_rvalue_ref() noexcept(not EXCEPTIONS_ENABLED)
+        inline value_type&& get_rvalue_ref() noexcept(!EXCEPTIONS_ENABLED)
         {
             if constexpr (EXCEPTIONS_ENABLED) {
                 if(!engaged)
