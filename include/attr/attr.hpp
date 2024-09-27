@@ -19,34 +19,19 @@ namespace attr {
     constexpr bool ASSERT_ENABLED = false;
 
 #pragma region bad_attr_access
-    // Primary template
     template<bool>
     struct bad_attr_access_impl;
 
-    // Specialization for when exceptions are enabled
     template<>
     struct bad_attr_access_impl<true> : public std::logic_error {
-        bad_attr_access_impl() : std::logic_error("std::bad_attr_access exception") {}
-        virtual ~bad_attr_access_impl() noexcept = default;
+        bad_attr_access_impl() : std::logic_error("attr::bad_attr_access exception") {}
+        ~bad_attr_access_impl() noexcept override = default;
     };
 
-    // Specialization for when exceptions are disabled
     template<>
     struct bad_attr_access_impl<false> {};
 
-    // Use SFINAE to select the appropriate implementation
-    template<bool B, typename = void>
-    struct bad_attr_access_selector {
-        using type = bad_attr_access_impl<false>;
-    };
-
-    template<bool B>
-    struct bad_attr_access_selector<B, std::enable_if_t<B>> {
-        using type = bad_attr_access_impl<true>;
-    };
-
-    using bad_attr_access = bad_attr_access_selector<EXCEPTIONS_ENABLED>::type;
-
+    using bad_attr_access = bad_attr_access_impl<EXCEPTIONS_ENABLED>;
 #pragma endregion
 
     namespace Internal {
