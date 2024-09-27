@@ -15,6 +15,40 @@ namespace attr {
     template<typename T>
     class attr;
 
+    constexpr bool EXCEPTIONS_ENABLED = false;
+    constexpr bool ASSERT_ENABLED = false;
+
+#pragma region bad_attr_access
+    // Primary template
+    template<bool>
+    struct bad_attr_access_impl;
+
+    // Specialization for when exceptions are enabled
+    template<>
+    struct bad_attr_access_impl<true> : public std::logic_error {
+        bad_attr_access_impl() : std::logic_error("std::bad_attr_access exception") {}
+        virtual ~bad_attr_access_impl() noexcept = default;
+    };
+
+    // Specialization for when exceptions are disabled
+    template<>
+    struct bad_attr_access_impl<false> {};
+
+    // Use SFINAE to select the appropriate implementation
+    template<bool B, typename = void>
+    struct bad_attr_access_selector {
+        using type = bad_attr_access_impl<false>;
+    };
+
+    template<bool B>
+    struct bad_attr_access_selector<B, std::enable_if_t<B>> {
+        using type = bad_attr_access_impl<true>;
+    };
+
+    using bad_attr_access = bad_attr_access_selector<EXCEPTIONS_ENABLED>::type;
+
+#pragma endregion
+
     namespace Internal {
         template<typename T>
         concept TriviallyDestructible = std::is_trivially_destructible_v<T>;
@@ -97,8 +131,8 @@ namespace attr {
         using value_type = T;
         using value_result_type = std::remove_volatile_t<value_type>;
 
-        static_assert(!std::is_reference<value_type>::value, "attr of a reference type is ill-formed");
-        static_assert(!std::is_same<value_type, std::in_place_t>::value, "attr of a in_place_t type is ill-formed");
+        static_assert(!std::is_reference_v<value_type>, "attr of a reference type is ill-formed");
+        static_assert(!std::is_same_v<value_type, std::in_place_t>, "attr of a in_place_t type is ill-formed");
 
         constexpr attr() noexcept = default;
         explicit constexpr attr(const value_type& value) : base_type(value) {}
@@ -237,6 +271,60 @@ namespace attr {
         inline void construct_value(Args&&... args)
         { ::new (std::addressof(val)) value_type(std::forward<Args>(args)...); }
 
+        inline T* get_value_address() noexcept(not EXCEPTIONS_ENABLED)
+        {
+            if constexpr (EXCEPTIONS_ENABLED) {
+                if(!engaged)
+                    throw bad_attr_access();
+            } else if constexpr (ASSERT_ENABLED) {
+                assert(engaged, "no value to retrieve");
+            }
+            return reinterpret_cast<T*>(std::addressof(val));
+        }
+
+        inline const T* get_value_address() const noexcept(not EXCEPTIONS_ENABLED)
+        {
+            if constexpr (EXCEPTIONS_ENABLED) {
+                if(!engaged)
+                    throw bad_attr_access();
+            } else if constexpr (ASSERT_ENABLED) {
+                assert(engaged, "no value to retrieve");
+            }
+            return reinterpret_cast<T*>(std::addressof(val));
+        }
+
+        inline value_type& get_value_ref() noexcept(not EXCEPTIONS_ENABLED)
+        {
+            if constexpr (EXCEPTIONS_ENABLED) {
+                if(!engaged)
+                    throw bad_attr_access();
+            } else if constexpr (ASSERT_ENABLED) {
+                assert(engaged, "no value to retrieve");
+            }
+            return *static_cast<value_type *>(std::addressof(val));
+        }
+
+        inline const value_type& get_value_ref() const noexcept(not EXCEPTIONS_ENABLED)
+        {
+            if constexpr (EXCEPTIONS_ENABLED) {
+                if(!engaged)
+                    throw bad_attr_access();
+            } else if constexpr (ASSERT_ENABLED) {
+                assert(engaged, "no value to retrieve");
+            }
+            return *static_cast<value_type *>(std::addressof(val));
+        }
+
+        inline value_type&& get_rvalue_ref() noexcept(not EXCEPTIONS_ENABLED)
+        {
+            if constexpr (EXCEPTIONS_ENABLED) {
+                if(!engaged)
+                    throw bad_attr_access();
+            } else if constexpr (ASSERT_ENABLED) {
+                assert(engaged, "no value to retrieve");
+            }
+            return std::move(*static_cast<value_type *>(std::addressof(val)));
+        }
     };
 
 }

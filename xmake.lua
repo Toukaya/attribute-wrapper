@@ -15,6 +15,10 @@ if is_mode("coverage") then
     if is_plat("macosx") then
         add_cxflags("-fprofile-instr-generate", "-fcoverage-mapping")
         add_ldflags("-fprofile-instr-generate", "-fcoverage-mapping")
+        toolchain("llvm")
+            set_kind("standalone")
+            set_sdkdir("/opt/homebrew/opt/llvm")
+        set_toolchains("llvm")
     elseif is_plat("linux") then
         add_cxflags("--coverage")
         add_ldflags("--coverage")
@@ -48,17 +52,19 @@ rule_end()
 add_rules("unity_build", {batchsize = 4})
 
 option("use_modules")
-    set_default(false)
+    set_default(true)
     set_showmenu(true)
     set_description("Use C++ modules (cppm) if enabled, otherwise use hpp")
 option_end()
 
 target("attr")
-    set_kind("headeronly")
-
     if has_config("use_modules") then
-        add_files("include/attr/*.cppm", {install = true})
+        set_kind("static")
+        add_files("include/attr/*.ixx", "test/attr_module_test.cpp")
+        set_languages("c++20")
+        set_policy("build.c++.modules", true)
     else
+        set_kind("headeronly")
         add_headerfiles("include/attr/*.hpp", {install = true})
     end
     add_includedirs("include/attr")
@@ -69,6 +75,13 @@ option("test_on")
     set_description("Enable test build")
 option_end()
 
-if has_config("test_on") then
-    includes("test")
-end
+-- if has_config("test_on") then
+--     includes("test")
+-- end
+
+-- target("test")
+--     set_kind("binary")  -- 定义为可执行文件
+--     add_files("attr_module_test.cpp")
+--     add_packages("catch2")
+--     add_deps("attr")
+--     add_includedirs("../include/attr")
