@@ -106,11 +106,11 @@ namespace attr {
 
     template<typename T>
     class attr : private Internal::attr_storage<std::remove_cv_t<T>> {
-        using base_type = Internal::attr_storage<std::remove_cv_t<T>>;
+        using BaseType = Internal::attr_storage<std::remove_cv_t<T>>;
 
-        using base_type::destruct_value;
-        using base_type::engaged;
-        using base_type::val;
+        using BaseType::destruct_value;
+        using BaseType::engaged;
+        using BaseType::val;
 
     public:
         using value_type = T;
@@ -120,40 +120,40 @@ namespace attr {
         static_assert(!std::is_same_v<value_type, std::in_place_t>, "attr of a in_place_t type is ill-formed");
 
         constexpr attr() noexcept = default;
-        explicit constexpr attr(const value_type& value) : base_type(value) {}
+        explicit constexpr attr(const value_type& value) : BaseType(value) {}
         explicit constexpr attr(value_type&& value) noexcept(std::is_nothrow_move_constructible_v<T>)
-            : base_type(std::move(value)) {}
-        attr(const attr& other) : base_type()
+            : BaseType(std::move(value)) {}
+        attr(const attr& other) : BaseType()
         {
             engaged = other.engaged;
 
             if (engaged)
             {
-                auto* pOtherValue = reinterpret_cast<const T*>(std::addressof(other.val));
+                auto* pOtherValue = std::launder(reinterpret_cast<const T*>(std::addressof(other.val)));
                 ::new (std::addressof(val)) value_type(*pOtherValue);
             }
         }
-        attr(attr&& other) noexcept : base_type()
+        attr(attr&& other) noexcept : BaseType()
         {
             engaged = other.engaged;
 
             if (engaged)
             {
-                auto* pOtherValue = reinterpret_cast<T*>(std::addressof(other.val));
+                auto* pOtherValue = std::launder(reinterpret_cast<T*>(std::addressof(other.val)));
                 ::new (std::addressof(val)) value_type(std::move(*pOtherValue));
             }
         }
 
         template <typename... Args>
-        constexpr explicit attr(std::in_place_t, Args&&... args) : base_type(std::in_place, std::forward<Args>(args)...) {}
+        constexpr explicit attr(std::in_place_t, Args&&... args) : BaseType(std::in_place, std::forward<Args>(args)...) {}
 
         template <typename U = value_type>
         requires AttrConstructible<T, U>
         inline explicit constexpr attr(U&& value)
-            : base_type(std::in_place, std::forward<U>(value)) {}
+            : BaseType(std::in_place, std::forward<U>(value)) {}
 
         inline attr& operator=(const attr& other) {
-            auto* pOtherValue = reinterpret_cast<const T*>(std::addressof(other.val));
+            auto* pOtherValue = std::launder(reinterpret_cast<const T*>(std::addressof(other.val)));
             if (engaged == other.engaged)
             {
                 if (engaged)
@@ -177,7 +177,7 @@ namespace attr {
 
         inline attr& operator=(attr&& other) noexcept(noexcept(std::is_nothrow_move_assignable_v<value_type> &&
                                            std::is_nothrow_move_constructible_v<value_type>)) {
-            auto* pOtherValue = reinterpret_cast<T*>(std::addressof(other.val));
+            auto* pOtherValue = std::launder(reinterpret_cast<T*>(std::addressof(other.val)));
             if (engaged == other.engaged)
             {
                 if (engaged)
@@ -264,7 +264,7 @@ namespace attr {
             } else if constexpr (ASSERT_ENABLED) {
                 assert(engaged, "no value to retrieve");
             }
-            return reinterpret_cast<T*>(std::addressof(val));
+            return std::launder(reinterpret_cast<T*>(std::addressof(val)));
         }
 
         inline const T* get_value_address() const noexcept(!EXCEPTIONS_ENABLED)
@@ -275,7 +275,7 @@ namespace attr {
             } else if constexpr (ASSERT_ENABLED) {
                 assert(engaged, "no value to retrieve");
             }
-            return reinterpret_cast<T*>(std::addressof(val));
+            return std::launder(reinterpret_cast<T*>(std::addressof(val)));
         }
 
         inline value_type& get_value_ref() noexcept(!EXCEPTIONS_ENABLED)
