@@ -10,8 +10,8 @@
 
 namespace touka {
     namespace detail {
-        constexpr bool EXCEPTIONS_ENABLED = false;
-        constexpr bool ASSERT_ENABLED = false;
+        constexpr bool EXCEPTIONS_ENABLED = true;
+        constexpr bool ASSERT_ENABLED = true;
     }
 
 #pragma region assert
@@ -20,22 +20,18 @@ namespace touka {
 
     template<>
     struct assert_impl<true> {
-        [[noreturn]] static inline void handle_assertion_failure(const char* msg, const std::source_location&loc) noexcept {
-            std::printf("Assertion failed: %s\nFile: %s\nFunction: %s\nLine: %u\n",
-                        msg, loc.file_name(), loc.function_name(), loc.line());
-            std::abort();
-        }
-
         static inline void assert_msg(const bool condition, const char* msg, const std::source_location&loc) noexcept {
             if (!condition) [[unlikely]] {
-                handle_assertion_failure(msg, loc);
+                std::printf("Assertion failed: %s\nFile: %s\nFunction: %s\nLine: %u\n",
+                        msg, loc.file_name(), loc.function_name(), loc.line());
+                std::abort();
             }
         }
     };
 
     template<>
     struct assert_impl<false> {
-        static constexpr inline void assert_msg(bool condition, const char* msg, const std::source_location&loc) noexcept {}
+        static constexpr inline void assert_msg([[maybe_unused]]bool condition, [[maybe_unused]]const char* msg, [[maybe_unused]]const std::source_location&loc) noexcept {}
     };
 
     inline void assert_msg(bool condition, const char* msg, const std::source_location& loc = std::source_location::current()) noexcept {
@@ -197,9 +193,11 @@ namespace attr {
 
         template<typename U = value_type>
             requires AttrConstructible<T, U>
-        inline explicit constexpr attr(U&&value)
+        inline constexpr explicit attr(U&& value)
             : BaseType(std::in_place, std::forward<U>(value)) {
         }
+
+        constexpr inline explicit operator bool() const { return engaged; }
 
         inline attr& operator=(const attr&other) {
             auto* pOtherValue = std::launder(reinterpret_cast<const T *>(std::addressof(other.val)));
@@ -241,7 +239,7 @@ namespace attr {
         }
 
         template<class U>
-            requires std::same_as<std::decay_t<U>, T>
+        requires std::same_as<std::decay_t<U>, T>
         inline attr& operator=(U&&u) {
             if (engaged) {
                 *get_value_address() = std::forward<U>(u);
@@ -282,6 +280,29 @@ namespace attr {
             }
         }
 
+        constexpr std::strong_ordering operator<=>(const attr& rhs) const {
+            return static_cast<bool>(*this) == static_cast<bool>(rhs)
+            ? (!static_cast<bool>(*this) ? std::strong_ordering::equal : static_cast<T>(*this) <=> static_cast<T>(rhs))
+            : static_cast<bool>(*this) <=> static_cast<bool>(rhs);
+        }
+
+        constexpr auto operator<=>(const T& value) const {
+            return static_cast<bool>(*this) ? *this <=> value : std::strong_ordering::less;
+        }
+
+        constexpr bool operator==(const attr& rhs) const {
+            return (static_cast<bool>(*this) == static_cast<bool>(rhs)) && (!static_cast<bool>(*this) || static_cast<T>(*this) == static_cast<T>(rhs));
+        }
+
+        constexpr bool operator==(const T& value) const {
+            return static_cast<bool>(*this) && *this == value;
+        }
+
+        operator T&() & { return get_value_ref(); }
+        operator T&&() && { return std::move(get_value_ref()); }
+        operator const T&() const & { return get_value_ref(); }
+        operator const T&&() const && { return std::move(get_value_ref()); }
+
     private:
         template<class... Args>
         inline void construct_value(Args&&... args) {
@@ -293,18 +314,17 @@ namespace attr {
                 if (!engaged) {
                     throw bad_attr_access();
                 }
-            }
-            else if constexpr (touka::detail::ASSERT_ENABLED) {
+            } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return std::launder(reinterpret_cast<T *>(std::addressof(val)));
+            return std::bit_cast<T *>(std::addressof(val));
         }
 
         inline T* get_value_address() noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
             if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return std::launder(reinterpret_cast<T *>(std::addressof(val)));
+            return std::bit_cast<T *>(std::addressof(val));
         }
 
         inline const T* get_value_address() const {
@@ -312,74 +332,92 @@ namespace attr {
                 if (!engaged) {
                     throw bad_attr_access();
                 }
-            }
-            else if constexpr (touka::detail::ASSERT_ENABLED) {
+            } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return std::launder(reinterpret_cast<T *>(std::addressof(val)));
+            return std::bit_cast<T *>(std::addressof(val));
         }
 
         inline const T* get_value_address() const noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
             if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return std::launder(reinterpret_cast<T *>(std::addressof(val)));
+            return std::bit_cast<T *>(std::addressof(val));
         }
 
         inline value_type& get_value_ref() {
             if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
                 if (!engaged)
                     throw bad_attr_access();
-            }
-            else if constexpr (touka::detail::ASSERT_ENABLED) {
+            } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return *static_cast<value_type *>(std::addressof(val));
+            return *std::bit_cast<value_type *>(std::addressof(val));
         }
 
         inline value_type& get_value_ref() noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
             if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged && "no value to retrieve");
             }
-            return *static_cast<value_type *>(std::addressof(val));
+            return *std::bit_cast<value_type *>(std::addressof(val));
         }
 
         inline const value_type& get_value_ref() const {
             if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
                 if (!engaged)
                     throw bad_attr_access();
-            }
-            else if constexpr (touka::detail::ASSERT_ENABLED) {
+            } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return *static_cast<value_type *>(std::addressof(val));
+            return *std::bit_cast<value_type *>(std::addressof(val));
         }
 
         inline const value_type& get_value_ref() const noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
             if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return *static_cast<value_type *>(std::addressof(val));
+            return *std::bit_cast<value_type *>(std::addressof(val));
         }
 
         inline value_type&& get_rvalue_ref() {
             if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
                 if (!engaged)
                     throw bad_attr_access();
-            }
-            else if constexpr (touka::detail::ASSERT_ENABLED) {
+            } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return std::move(*static_cast<value_type *>(std::addressof(val)));
+            return std::move(*std::bit_cast<value_type *>(std::addressof(val)));
         }
 
         inline value_type&& get_rvalue_ref() noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
             if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
-            return std::move(*static_cast<value_type *>(std::addressof(val)));
+            return std::move(*std::bit_cast<value_type *>(std::addressof(val)));
         }
     };
+
+    template <class T>
+    inline constexpr bool operator==(const attr<T>& lhs, const attr<T>& rhs)
+    {
+        return (static_cast<bool>(lhs) != static_cast<bool>(rhs)) ? false : (static_cast<bool>(lhs) == false) ? true : lhs == rhs;
+    }
+
+    template <class T>
+    inline constexpr auto operator<=>(const attr<T>& lhs, const attr<T>& rhs) {
+        return (!lhs.has_value() && !rhs.has_value()) ? std::strong_ordering::equal : (!lhs.has_value()) ? std::strong_ordering::less : (!rhs.has_value()) ? std::strong_ordering::greater : lhs <=> rhs;
+    }
+
+    template <class T>
+    constexpr auto operator<=>(const T& value, const attr<T>& opt) {
+        return opt.has_value() ? value <=> opt : std::strong_ordering::greater;
+    }
+
+    template <class T>
+    constexpr bool operator==(const T& value, const attr<T>& opt) {
+        return opt.has_value() && value == opt;
+    }
+
 }
 
 #endif //ATTR_HPP
