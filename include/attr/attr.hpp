@@ -47,22 +47,22 @@ namespace attr {
     class attr;
 
 #pragma region bad_attr_access
-    template<bool>
-    struct bad_attr_access_impl;
+    class bad_attr_access : public std::logic_error {
+    public:
+        bad_attr_access() noexcept : std::logic_error("attr::bad_attr_access exception") {};
+        bad_attr_access(const bad_attr_access&) noexcept = default;
+        bad_attr_access& operator=(const bad_attr_access&) noexcept = default;
+        ~bad_attr_access() noexcept override;
+    };
 
-    template<>
-    struct bad_attr_access_impl<true> : public std::logic_error {
-        bad_attr_access_impl() : std::logic_error("attr::bad_attr_access exception") {
+    [[noreturn]] inline void throw_bad_attr_access() noexcept(!touka::detail::EXCEPTIONS_ENABLED) {
+        if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
+            throw bad_attr_access();
+        } else {
+            std::printf("bad_attr_access was thrown in -fno-exceptions mode");
+            std::abort();
         }
-
-        ~bad_attr_access_impl() noexcept override = default;
-    };
-
-    template<>
-    struct bad_attr_access_impl<false> {
-    };
-
-    using bad_attr_access = bad_attr_access_impl<touka::detail::EXCEPTIONS_ENABLED>;
+    }
 #pragma endregion
 
     namespace Internal {
@@ -312,7 +312,7 @@ namespace attr {
         inline T* get_value_address() {
             if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
                 if (!engaged) {
-                    throw bad_attr_access();
+                    throw_bad_attr_access();
                 }
             } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
@@ -330,7 +330,7 @@ namespace attr {
         inline const T* get_value_address() const {
             if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
                 if (!engaged) {
-                    throw bad_attr_access();
+                    throw_bad_attr_access();
                 }
             } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
@@ -348,7 +348,7 @@ namespace attr {
         inline value_type& get_value_ref() {
             if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
                 if (!engaged)
-                    throw bad_attr_access();
+                    throw_bad_attr_access();
             } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
@@ -365,7 +365,7 @@ namespace attr {
         inline const value_type& get_value_ref() const {
             if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
                 if (!engaged)
-                    throw bad_attr_access();
+                    throw_bad_attr_access();
             } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
@@ -382,7 +382,7 @@ namespace attr {
         inline value_type&& get_rvalue_ref() {
             if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
                 if (!engaged)
-                    throw bad_attr_access();
+                    throw_bad_attr_access();
             } else if constexpr (touka::detail::ASSERT_ENABLED) {
                 touka::assert_msg(engaged, "no value to retrieve");
             }
