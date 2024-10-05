@@ -52,7 +52,7 @@ rule_end()
 add_rules("unity_build", {batchsize = 4})
 
 option("use_modules")
-    set_default(true)
+    set_default(false)
     set_showmenu(true)
     set_description("Use C++ modules (cppm) if enabled, otherwise use hpp")
 option_end()
@@ -75,9 +75,9 @@ option("test_on")
     set_description("Enable test build")
 option_end()
 
--- if has_config("test_on") then
---     includes("test")
--- end
+if has_config("test_on") then
+    includes("test")
+end
 
 -- target("test")
 --     set_kind("binary")  -- 定义为可执行文件

@@ -10,7 +10,7 @@
 
 struct IntStruct
 {
-    IntStruct(int in) : data(in) {}
+    explicit IntStruct(int in) : data(in) {}
     int data;
 };
 
@@ -123,17 +123,42 @@ int assignment_test::num_objects_inited = 0;
 using namespace std;
 
 TEST_CASE("Trivially Destructible Test", "[trivial_destructible]") {
-	REQUIRE(is_trivially_destructible_v<int>);
-	REQUIRE(is_trivially_destructible_v<attr::Internal::attr_storage<int>>);
-	REQUIRE(is_trivially_destructible_v<attr::attr<int>>);
-	REQUIRE(is_trivially_destructible_v<attr::attr<int>> == is_trivially_destructible_v<int>);
 
-	struct NotTrivialDestructible { ~NotTrivialDestructible() = default; };
+    SECTION("Check trivially destructible for basic types") {
+        REQUIRE(is_trivially_destructible_v<int> == true); // int should be trivially destructible
+    }
 
-	REQUIRE(!is_trivially_destructible_v<NotTrivialDestructible>);
-	REQUIRE(!is_trivially_destructible_v<attr::attr<NotTrivialDestructible>>);
-	REQUIRE(!is_trivially_destructible_v<::attr::Internal::attr_storage<NotTrivialDestructible>>);
-	REQUIRE(is_trivially_destructible_v<attr::attr<NotTrivialDestructible>> == is_trivially_destructible_v<NotTrivialDestructible>);
+    SECTION("Check trivially destructible for attr_storage<int>") {
+        REQUIRE(is_trivially_destructible_v<attr::Internal::attr_storage<int>> == true); // attr_storage<int> should be trivially destructible
+    }
+
+    SECTION("Check trivially destructible for attr<int>") {
+        REQUIRE(is_trivially_destructible_v<attr::attr<int>> == true); // attr<int> should be trivially destructible
+    }
+
+    SECTION("Comparison of trivial destructibility between attr<int> and int") {
+        REQUIRE(is_trivially_destructible_v<attr::attr<int>> == is_trivially_destructible_v<int>); // attr<int> should match the trivial destructibility of int
+    }
+
+    SECTION("Check non-trivially destructible custom struct") {
+        struct NotTrivialDestructible { ~NotTrivialDestructible() = default; };
+        REQUIRE(is_trivially_destructible_v<NotTrivialDestructible> == false); // Custom struct should not be trivially destructible
+    }
+
+    SECTION("Check non-trivially destructible for attr<NotTrivialDestructible>") {
+        struct NotTrivialDestructible { ~NotTrivialDestructible() = default; };
+        REQUIRE(is_trivially_destructible_v<attr::attr<NotTrivialDestructible>> == false); // attr<NotTrivialDestructible> should not be trivially destructible
+    }
+
+    SECTION("Check non-trivially destructible for attr_storage<NotTrivialDestructible>") {
+        struct NotTrivialDestructible { ~NotTrivialDestructible() = default; };
+        REQUIRE(is_trivially_destructible_v<::attr::Internal::attr_storage<NotTrivialDestructible>> == false); // attr_storage<NotTrivialDestructible> should not be trivially destructible
+    }
+
+    SECTION("Comparison of trivial destructibility between attr<NotTrivialDestructible> and NotTrivialDestructible") {
+        struct NotTrivialDestructible { ~NotTrivialDestructible() = default; };
+        REQUIRE(is_trivially_destructible_v<attr::attr<NotTrivialDestructible>> == is_trivially_destructible_v<NotTrivialDestructible>); // attr<NotTrivialDestructible> should match the trivial destructibility of NotTrivialDestructible
+    }
 }
 // TestOptional
 //
@@ -732,3 +757,11 @@ TEST_CASE("Trivially Destructible Test", "[trivial_destructible]") {
 // 	return nErrorCount;
 // }
 
+
+int main(int argc, char* argv[]) {
+	Catch::Session session;
+
+	int result = session.run(argc, argv);
+
+	return result;
+}
