@@ -57,9 +57,8 @@ namespace attr {
             template<typename U, typename... Args>
                 requires std::constructible_from<T, std::initializer_list<U> &, Args...>
             constexpr explicit
-            attr_storage(std::in_place_t, std::initializer_list<U> initList, Args&&... args) {
-                ::new(std::addressof(val)) value_type(initList, std::forward<Args>(args)...);
-            }
+            attr_storage(std::in_place_t, std::initializer_list<U> initList, Args&&... args)
+            : val(initList, std::forward<Args>(args)...) {}
 
             value_type val;
         };
@@ -82,8 +81,8 @@ namespace attr {
 
             template<typename U, typename... Args>
                 requires std::constructible_from<T, std::initializer_list<U> &, Args...>
-            constexpr explicit attr_storage(std::in_place_t, std::initializer_list<U> ilist, Args&&... args)
-            { ::new(std::addressof(val)) value_type(ilist, std::forward<Args>(args)...); }
+            constexpr explicit attr_storage(std::in_place_t, std::initializer_list<U> initList, Args&&... args)
+            : val(initList, std::forward<Args>(args)...) {}
 
             value_type val;
         };
