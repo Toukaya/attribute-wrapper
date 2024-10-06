@@ -43,22 +43,16 @@ namespace attr {
 
             constexpr attr_storage()  noexcept requires DefaultConstructible<T> = default;
 
-            constexpr explicit attr_storage(const value_type&v) {
-                ::new(std::addressof(val)) value_type(v);
-            }
+            constexpr explicit attr_storage(const value_type& v) : val(v) {}
 
-            constexpr explicit attr_storage(value_type&&v) {
-                ::new(std::addressof(val)) value_type(std::move(v));
-            }
+            constexpr explicit attr_storage(const volatile value_type& v) : val(v) {}
 
-            constexpr ~attr_storage() {
-                val.~value_type();
-            }
+            constexpr explicit attr_storage(value_type&& v) : val(std::move(v)) {}
+
+            constexpr ~attr_storage() = default;
 
             template<typename... Args>
-            constexpr explicit attr_storage(std::in_place_t, Args&&... args) {
-                ::new(std::addressof(val)) value_type(std::forward<Args>(args)...);
-            }
+            constexpr explicit attr_storage(std::in_place_t, Args&&... args) : val(std::forward<Args>(args)...) {}
 
             template<typename U, typename... Args>
                 requires std::constructible_from<T, std::initializer_list<U> &, Args...>
@@ -77,17 +71,14 @@ namespace attr {
 
             constexpr attr_storage() noexcept requires DefaultConstructible<T> = default;
 
-            constexpr explicit attr_storage(const value_type&v) {
-                ::new(std::addressof(val)) value_type(v);
-            }
+            constexpr explicit attr_storage(const value_type& v) : val(v) {}
 
-            constexpr explicit attr_storage(value_type&&v) {
-                ::new(std::addressof(val)) value_type(std::move(v));
-            }
+            constexpr explicit attr_storage(const volatile value_type& v) : val(v) {}
+
+            constexpr explicit attr_storage(value_type&& v) : val(std::move(v)) {}
 
             template<typename... Args>
-            constexpr explicit attr_storage(std::in_place_t, Args&&... args)
-            { ::new(std::addressof(val)) value_type(std::forward<Args>(args)...); }
+            constexpr explicit attr_storage(std::in_place_t, Args&&... args) : val(std::forward<Args>(args)...) {}
 
             template<typename U, typename... Args>
                 requires std::constructible_from<T, std::initializer_list<U> &, Args...>
@@ -118,6 +109,7 @@ namespace attr {
         static_assert(!std::is_same_v<value_type, std::in_place_t>, "attr of a in_place_t type is ill-formed");
 
         constexpr attr() noexcept = default;
+        constexpr ~attr() = default;
 
         explicit constexpr attr(const value_type&value) : BaseType(value) {
         }
