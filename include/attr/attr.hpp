@@ -8,7 +8,20 @@
 #include <type_traits>
 
 namespace attr {
-    template<typename T>
+
+    template<typename Fn, typename T>
+    concept GetterFn = requires(Fn&& fn) {
+        { std::invoke(std::forward<Fn>(fn)) } -> std::same_as<T>;
+    };
+
+    template<typename Fn, typename T>
+    concept SetterFn = requires(Fn&& fn, T&& value) {
+        { std::invoke(std::forward<Fn>(fn), std::forward<T>(value)) };
+    };
+
+    template<typename T, typename Getter = void, typename Setter = void>
+    requires (std::is_same_v<Getter, void> || GetterFn<Getter, T>)
+        && (std::is_same_v<Setter, void> || SetterFn<Setter, T>)
     class attr;
 
     namespace Internal {
@@ -94,7 +107,11 @@ namespace attr {
             !std::same_as<std::remove_cvref_t<U>, std::in_place_t> &&
             !std::same_as<std::remove_cvref_t<U>, attr<T>>;
 
-    template<typename T>
+
+
+    template<typename T, typename Getter, typename Setter>
+    requires (std::is_same_v<Getter, void> || GetterFn<Getter, T>)
+        && (std::is_same_v<Setter, void> || SetterFn<Setter, T>)
     class attr : private Internal::attr_storage<std::remove_cv_t<T>> {
         using BaseType = Internal::attr_storage<std::remove_cv_t<T>>;
 
@@ -183,6 +200,26 @@ namespace attr {
         constexpr bool operator==(const T& value) const {
             return _get() == value;
         }
+
+        class ValueGetter {
+        protected:
+            friend class attr;
+            Getter getter;
+            explicit ValueGetter(Getter g) : getter(g) {}
+        public:
+            inline auto operator()(const value_type& x) const
+            { return getter(x); }
+        };
+
+        class ValueSetter {
+        protected:
+            friend class attr;
+            Setter setter;
+            explicit ValueSetter(Setter g) : setter(g) {}
+        public:
+            inline auto operator()(const value_type& x) const
+            { return setter(x); }
+        };
 
     private:
         template<class... Args>
