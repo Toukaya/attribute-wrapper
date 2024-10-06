@@ -6,135 +6,95 @@
 #define ATTR_HPP
 #include <initializer_list>
 #include <type_traits>
-#include <source_location>
-
-namespace touka {
-    namespace detail {
-        constexpr bool EXCEPTIONS_ENABLED = true;
-        constexpr bool ASSERT_ENABLED = true;
-    }
-
-#pragma region assert
-    template<bool>
-    struct assert_impl;
-
-    template<>
-    struct assert_impl<true> {
-        static inline void assert_msg(const bool condition, const char* msg, const std::source_location&loc) noexcept {
-            if (!condition) [[unlikely]] {
-                std::printf("Assertion failed: %s\nFile: %s\nFunction: %s\nLine: %u\n",
-                        msg, loc.file_name(), loc.function_name(), loc.line());
-                std::abort();
-            }
-        }
-    };
-
-    template<>
-    struct assert_impl<false> {
-        static constexpr inline void assert_msg([[maybe_unused]]bool condition, [[maybe_unused]]const char* msg, [[maybe_unused]]const std::source_location&loc) noexcept {}
-    };
-
-    inline void assert_msg(bool condition, const char* msg, const std::source_location& loc = std::source_location::current()) noexcept {
-        assert_impl<detail::ASSERT_ENABLED>::assert_msg(condition, msg, loc);
-    }
-
-#pragma endregion
-}
-
 
 namespace attr {
     template<typename T>
     class attr;
-
-#pragma region bad_attr_access
-    class bad_attr_access : public std::logic_error {
-    public:
-        bad_attr_access() noexcept : std::logic_error("attr::bad_attr_access exception") {};
-        bad_attr_access(const bad_attr_access&) noexcept = default;
-        bad_attr_access& operator=(const bad_attr_access&) noexcept = default;
-        ~bad_attr_access() noexcept override;
-    };
-
-    [[noreturn]] inline void throw_bad_attr_access() noexcept(!touka::detail::EXCEPTIONS_ENABLED) {
-        if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
-            throw bad_attr_access();
-        } else {
-            std::printf("bad_attr_access was thrown in -fno-exceptions mode");
-            std::abort();
-        }
-    }
-#pragma endregion
 
     namespace Internal {
         template<typename T>
         concept TriviallyDestructible = std::is_trivially_destructible_v<T>;
 
         template<typename T>
+        concept DefaultConstructible = std::is_default_constructible_v<T>;
+
+        template<typename From, typename To>
+        concept reference_bindable = requires {
+            requires std::is_reference_v<To>;
+            requires std::is_reference_v<From> || std::is_convertible_v<From, To>;
+            requires (std::is_lvalue_reference_v<To> &&
+                      (std::is_lvalue_reference_v<From> ||
+                       std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<From>>,
+                                             std::add_pointer_t<std::remove_reference_t<To>>> ||
+                       std::is_same_v<std::remove_cvref_t<From>,
+                                      std::reference_wrapper<std::remove_reference_t<To>>> ||
+                       std::is_same_v<std::remove_cvref_t<From>,
+                                      std::reference_wrapper<std::remove_const_t<std::remove_reference_t<To>>>>)) ||
+                     (std::is_rvalue_reference_v<To> &&
+                      !std::is_lvalue_reference_v<From> &&
+                      std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<From>>,
+                                            std::add_pointer_t<std::remove_reference_t<To>>>);
+        };
+
+        template<typename T>
         struct attr_storage {
-            using value_type = std::remove_const_t<T>;
+            using value_type = T;
+            static_assert(std::is_object_v<value_type>, "instantiation of attr with a non-object type is undefined behavior");
 
-            constexpr attr_storage() noexcept = default;
+            constexpr attr_storage()  noexcept requires DefaultConstructible<T> = default;
 
-            constexpr explicit attr_storage(const value_type&v) : engaged(true) {
+            constexpr explicit attr_storage(const value_type&v) {
                 ::new(std::addressof(val)) value_type(v);
             }
 
-            constexpr explicit attr_storage(value_type&&v) : engaged(true) {
+            constexpr explicit attr_storage(value_type&&v) {
                 ::new(std::addressof(val)) value_type(std::move(v));
             }
 
             constexpr ~attr_storage() {
-                if (engaged) destruct_value();
+                val.~value_type();
             }
 
             template<typename... Args>
-            constexpr explicit attr_storage(std::in_place_t, Args&&... args) : engaged(true) {
+            constexpr explicit attr_storage(std::in_place_t, Args&&... args) {
                 ::new(std::addressof(val)) value_type(std::forward<Args>(args)...);
             }
 
             template<typename U, typename... Args>
                 requires std::constructible_from<T, std::initializer_list<U> &, Args...>
             constexpr explicit
-            attr_storage(std::in_place_t, std::initializer_list<U> ilist, Args&&... args) : engaged(true) {
-                ::new(std::addressof(val)) value_type(ilist, std::forward<Args>(args)...);
+            attr_storage(std::in_place_t, std::initializer_list<U> initList, Args&&... args) {
+                ::new(std::addressof(val)) value_type(initList, std::forward<Args>(args)...);
             }
 
-            constexpr void destruct_value() { reinterpret_cast<value_type *>(std::addressof(val))->~value_type(); }
-
-            std::aligned_storage_t<sizeof(value_type), std::alignment_of_v<value_type>> val;
-            bool engaged = false;
+            value_type val;
         };
 
         template<TriviallyDestructible T>
         struct attr_storage<T> {
-            using value_type = std::remove_const_t<T>;
+            using value_type = T;
+            static_assert(std::is_object_v<value_type>, "instantiation of attr with a non-object type is undefined behavior");
 
-            constexpr attr_storage() noexcept = default;
+            constexpr attr_storage() noexcept requires DefaultConstructible<T> = default;
 
-            constexpr explicit attr_storage(const value_type&v) : engaged(true) {
+            constexpr explicit attr_storage(const value_type&v) {
                 ::new(std::addressof(val)) value_type(v);
             }
 
-            constexpr explicit attr_storage(value_type&&v) : engaged(true) {
+            constexpr explicit attr_storage(value_type&&v) {
                 ::new(std::addressof(val)) value_type(std::move(v));
             }
 
             template<typename... Args>
             constexpr explicit attr_storage(std::in_place_t, Args&&... args)
-                : engaged(true) { ::new(std::addressof(val)) value_type(std::forward<Args>(args)...); }
+            { ::new(std::addressof(val)) value_type(std::forward<Args>(args)...); }
 
             template<typename U, typename... Args>
                 requires std::constructible_from<T, std::initializer_list<U> &, Args...>
             constexpr explicit attr_storage(std::in_place_t, std::initializer_list<U> ilist, Args&&... args)
-                : engaged(true) { ::new(std::addressof(val)) value_type(ilist, std::forward<Args>(args)...); }
+            { ::new(std::addressof(val)) value_type(ilist, std::forward<Args>(args)...); }
 
-            constexpr ~attr_storage() noexcept = default;
-
-            constexpr void destruct_value() {
-            }
-
-            std::aligned_storage_t<sizeof(value_type), std::alignment_of_v<value_type>> val;
-            bool engaged = false;
+            value_type val;
         };
     } // namespace Internal
 
@@ -148,8 +108,6 @@ namespace attr {
     class attr : private Internal::attr_storage<std::remove_cv_t<T>> {
         using BaseType = Internal::attr_storage<std::remove_cv_t<T>>;
 
-        using BaseType::destruct_value;
-        using BaseType::engaged;
         using BaseType::val;
 
     public:
@@ -169,139 +127,71 @@ namespace attr {
         }
 
         attr(const attr&other) : BaseType() {
-            engaged = other.engaged;
-
-            if (engaged) {
-                auto* pOtherValue = std::launder(reinterpret_cast<const T *>(std::addressof(other.val)));
-                ::new(std::addressof(val)) value_type(*pOtherValue);
-            }
+            const auto* pOtherValue = std::bit_cast<const T *>(std::addressof(other._get()));
+            ::new(std::addressof(_get())) value_type(*pOtherValue);
         }
 
         attr(attr&&other) noexcept : BaseType() {
-            engaged = other.engaged;
-
-            if (engaged) {
-                auto* pOtherValue = std::launder(reinterpret_cast<T *>(std::addressof(other.val)));
-                ::new(std::addressof(val)) value_type(std::move(*pOtherValue));
-            }
+            auto* pOtherValue = std::bit_cast<T *>(std::addressof(other._get()));
+            ::new(std::addressof(_get())) value_type(std::move(*pOtherValue));
         }
 
         template<typename... Args>
         constexpr explicit
-        attr(std::in_place_t, Args&&... args) : BaseType(std::in_place, std::forward<Args>(args)...) {
-        }
+        attr(std::in_place_t, Args&&... args) : BaseType(std::in_place, std::forward<Args>(args)...) {}
 
         template<typename U = value_type>
             requires AttrConstructible<T, U>
-        inline constexpr explicit attr(U&& value)
+        constexpr explicit attr(U&& value)
             : BaseType(std::in_place, std::forward<U>(value)) {
         }
 
-        constexpr inline explicit operator bool() const { return engaged; }
-
         inline attr& operator=(const attr&other) {
-            auto* pOtherValue = std::launder(reinterpret_cast<const T *>(std::addressof(other.val)));
-            if (engaged == other.engaged) {
-                if (engaged)
-                    *get_value_address() = *pOtherValue;
-            }
-            else {
-                if (engaged) {
-                    destruct_value();
-                    engaged = false;
-                }
-                else {
-                    construct_value(*pOtherValue);
-                    engaged = true;
-                }
-            }
+            const auto* pOtherValue = std::bit_cast<const T *>(std::addressof(other._get()));
+            *get_value_address() = *pOtherValue;
             return *this;
         }
 
-        inline attr& operator=(attr&&other) noexcept(noexcept(std::is_nothrow_move_assignable_v<value_type> &&
-                                                              std::is_nothrow_move_constructible_v<value_type>)) {
-            auto* pOtherValue = std::launder(reinterpret_cast<T *>(std::addressof(other.val)));
-            if (engaged == other.engaged) {
-                if (engaged)
-                    *get_value_address() = std::move(*pOtherValue);
-            }
-            else {
-                if (engaged) {
-                    destruct_value();
-                    engaged = false;
-                }
-                else {
-                    construct_value(std::move(*pOtherValue));
-                    engaged = true;
-                }
-            }
+        inline attr& operator=(attr&&other) noexcept(std::is_nothrow_move_assignable_v<value_type> &&
+                                                              std::is_nothrow_move_constructible_v<value_type>) {
+            auto* pOtherValue = std::bit_cast<T *>(std::addressof(other._get()));
+            *get_value_address() = std::move(*pOtherValue);
             return *this;
         }
 
         template<class U>
         requires std::same_as<std::decay_t<U>, T>
         inline attr& operator=(U&&u) {
-            if (engaged) {
-                *get_value_address() = std::forward<U>(u);
-            }
-            else {
-                engaged = true;
-                construct_value(std::forward<U>(u));
-            }
-
+            *get_value_address() = std::forward<U>(u);
             return *this;
         }
 
         inline void swap(attr&other)
             noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_swappable_v<T>) {
             using std::swap;
-            if (engaged == other.engaged) {
-                if (engaged)
-                    swap(**this, *other);
-            }
-            else {
-                if (engaged) {
-                    other.construct_value(std::move(*(value_type *)std::addressof(val)));
-                    destruct_value();
-                }
-                else {
-                    construct_value(std::move(*((value_type *)std::addressof(other.val))));
-                    other.destruct_value();
-                }
-
-                swap(engaged, other.engaged);
-            }
+            swap(_get(), other._get());
         }
 
-        inline void reset() {
-            if (engaged) {
-                destruct_value();
-                engaged = false;
-            }
-        }
+        operator T&() & { return _get(); }
+        operator T&&() && { return std::move(_get()); }
+        operator const T&() const & { return _get(); }
+        operator const T&&() const && { return std::move(_get()); }
 
         constexpr std::strong_ordering operator<=>(const attr& rhs) const {
-            return static_cast<bool>(*this) == static_cast<bool>(rhs)
-            ? (!static_cast<bool>(*this) ? std::strong_ordering::equal : static_cast<T>(*this) <=> static_cast<T>(rhs))
-            : static_cast<bool>(*this) <=> static_cast<bool>(rhs);
+            return _get() <=> rhs._get();
         }
 
         constexpr auto operator<=>(const T& value) const {
-            return static_cast<bool>(*this) ? *this <=> value : std::strong_ordering::less;
+            return _get() <=> value;
         }
 
         constexpr bool operator==(const attr& rhs) const {
-            return (static_cast<bool>(*this) == static_cast<bool>(rhs)) && (!static_cast<bool>(*this) || static_cast<T>(*this) == static_cast<T>(rhs));
+            return _get() == rhs._get();
         }
 
         constexpr bool operator==(const T& value) const {
-            return static_cast<bool>(*this) && *this == value;
+            return _get() == value;
         }
-
-        operator T&() & { return get_value_ref(); }
-        operator T&&() && { return std::move(get_value_ref()); }
-        operator const T&() const & { return get_value_ref(); }
-        operator const T&&() const && { return std::move(get_value_ref()); }
 
     private:
         template<class... Args>
@@ -310,114 +200,55 @@ namespace attr {
         }
 
         inline T* get_value_address() {
-            if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
-                if (!engaged) {
-                    throw_bad_attr_access();
-                }
-            } else if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
-            return std::bit_cast<T *>(std::addressof(val));
-        }
-
-        inline T* get_value_address() noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
-            if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
             return std::bit_cast<T *>(std::addressof(val));
         }
 
         inline const T* get_value_address() const {
-            if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
-                if (!engaged) {
-                    throw_bad_attr_access();
-                }
-            } else if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
             return std::bit_cast<T *>(std::addressof(val));
         }
 
-        inline const T* get_value_address() const noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
-            if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
-            return std::bit_cast<T *>(std::addressof(val));
-        }
-
-        inline value_type& get_value_ref() {
-            if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
-                if (!engaged)
-                    throw_bad_attr_access();
-            } else if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
-            return *std::bit_cast<value_type *>(std::addressof(val));
-        }
-
-        inline value_type& get_value_ref() noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
-            if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged && "no value to retrieve");
-            }
-            return *std::bit_cast<value_type *>(std::addressof(val));
-        }
-
-        inline const value_type& get_value_ref() const {
-            if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
-                if (!engaged)
-                    throw_bad_attr_access();
-            } else if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
-            return *std::bit_cast<value_type *>(std::addressof(val));
-        }
-
-        inline const value_type& get_value_ref() const noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
-            if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
-            return *std::bit_cast<value_type *>(std::addressof(val));
-        }
-
-        inline value_type&& get_rvalue_ref() {
-            if constexpr (touka::detail::EXCEPTIONS_ENABLED) {
-                if (!engaged)
-                    throw_bad_attr_access();
-            } else if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
-            return std::move(*std::bit_cast<value_type *>(std::addressof(val)));
-        }
-
-        inline value_type&& get_rvalue_ref() noexcept requires (!touka::detail::EXCEPTIONS_ENABLED) {
-            if constexpr (touka::detail::ASSERT_ENABLED) {
-                touka::assert_msg(engaged, "no value to retrieve");
-            }
-            return std::move(*std::bit_cast<value_type *>(std::addressof(val)));
-        }
+        constexpr value_type& _get() & noexcept { return this->val; }
+        constexpr const value_type& _get() const& noexcept { return this->val; }
+        constexpr value_type&& _get() && noexcept { return std::move(this->val); }
+        constexpr const value_type&& _get() const&& noexcept { return std::move(this->val); }
     };
 
     template <class T>
     inline constexpr bool operator==(const attr<T>& lhs, const attr<T>& rhs)
     {
-        return (static_cast<bool>(lhs) != static_cast<bool>(rhs)) ? false : (static_cast<bool>(lhs) == false) ? true : lhs == rhs;
+        return lhs == rhs;
     }
 
     template <class T>
     inline constexpr auto operator<=>(const attr<T>& lhs, const attr<T>& rhs) {
-        return (!lhs.has_value() && !rhs.has_value()) ? std::strong_ordering::equal : (!lhs.has_value()) ? std::strong_ordering::less : (!rhs.has_value()) ? std::strong_ordering::greater : lhs <=> rhs;
+        return lhs <=> rhs;
     }
 
     template <class T>
     constexpr auto operator<=>(const T& value, const attr<T>& opt) {
-        return opt.has_value() ? value <=> opt : std::strong_ordering::greater;
+        return value <=> opt;
     }
 
     template <class T>
     constexpr bool operator==(const T& value, const attr<T>& opt) {
-        return opt.has_value() && value == opt;
+        return value == opt;
     }
 
+    template <class Tp>
+    inline constexpr std::enable_if_t<std::is_move_constructible_v<Tp> && std::is_swappable_v<Tp>, void>
+    swap(attr<Tp>& lhs, attr<Tp>& rhs) noexcept(noexcept(lhs.swap(rhs))) {
+        lhs.swap(rhs);
+    }
+
+}
+
+namespace std {
+    template <class T>
+    struct hash<std::__enable_hash_helper<attr::attr<T>, remove_const_t<T>>> {
+        size_t operator()(const attr::attr<T>& attr) const noexcept {
+            return hash<std::remove_const_t<T>>()(attr._get());
+        }
+    };
 }
 
 #endif //ATTR_HPP
