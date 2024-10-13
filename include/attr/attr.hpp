@@ -20,17 +20,6 @@ namespace touka {
         { std::invoke(std::forward<Fn>(fn), value, new_value) };
     };
 
-    struct InaccessibleT {
-        struct InaccessibleTag {
-            explicit InaccessibleTag() = default;
-        };
-
-        constexpr explicit InaccessibleT(InaccessibleTag, InaccessibleTag) noexcept {
-        }
-    };
-
-    inline constexpr InaccessibleT inaccessible_t{InaccessibleT::InaccessibleTag{}, InaccessibleT::InaccessibleTag{}};
-
     enum class AccessSpecifiers : uint8_t {
         Public = 0,
         Private,
@@ -92,24 +81,6 @@ namespace touka {
 
         template<typename T>
         concept DefaultConstructible = std::is_default_constructible_v<T>;
-
-        template<typename From, typename To>
-        concept reference_bindable = requires {
-            requires std::is_reference_v<To>;
-            requires std::is_reference_v<From> || std::is_convertible_v<From, To>;
-            requires (std::is_lvalue_reference_v<To> &&
-                      (std::is_lvalue_reference_v<From> ||
-                       std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<From>>,
-                                             std::add_pointer_t<std::remove_reference_t<To>>> ||
-                       std::is_same_v<std::remove_cvref_t<From>,
-                                      std::reference_wrapper<std::remove_reference_t<To>>> ||
-                       std::is_same_v<std::remove_cvref_t<From>,
-                                      std::reference_wrapper<std::remove_const_t<std::remove_reference_t<To>>>>)) ||
-                     (std::is_rvalue_reference_v<To> &&
-                      !std::is_lvalue_reference_v<From> &&
-                      std::is_convertible_v<std::add_pointer_t<std::remove_reference_t<From>>,
-                                            std::add_pointer_t<std::remove_reference_t<To>>>);
-        };
 
         template<typename T>
         struct attr_storage {
