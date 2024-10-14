@@ -59,7 +59,7 @@ namespace touka {
         typename Getter = default_getter<T>,
         typename Setter = default_setter<T>>
     requires GetterFn<Getter, T> && SetterFn<Setter, T>
-    class attr;
+    class attr_impl;
 
     namespace Internal {
         template<typename T>
@@ -131,12 +131,12 @@ namespace touka {
     concept AttrConstructible =
             std::constructible_from<T, U &&> &&
             !std::same_as<std::remove_cvref_t<U>, std::in_place_t> &&
-            !std::same_as<std::remove_cvref_t<U>, attr<T>>;
+            !std::same_as<std::remove_cvref_t<U>, attr_impl<T>>;
 
 
     template<typename T, typename Getter, typename Setter>
     requires GetterFn<Getter, T> && SetterFn<Setter, T>
-    class attr : private Internal::attr_storage<std::remove_cv_t<T>> {
+    class attr_impl : private Internal::attr_storage<std::remove_cv_t<T>> {
         using BaseType = Internal::attr_storage<std::remove_cv_t<T>>;
 
         using BaseType::val;
@@ -150,40 +150,40 @@ namespace touka {
         static_assert(!std::is_reference_v<value_type>, "attr of a reference type is ill-formed");
         static_assert(!std::is_same_v<value_type, std::in_place_t>, "attr of a in_place_t type is ill-formed");
 
-        constexpr attr() noexcept = default;
-        constexpr ~attr() = default;
+        constexpr attr_impl() noexcept = default;
+        constexpr ~attr_impl() = default;
 
-        explicit constexpr attr(const value_type&value) : BaseType(value) {
+        explicit constexpr attr_impl(const value_type&value) : BaseType(value) {
         }
 
-        explicit constexpr attr(value_type&&value) noexcept(std::is_nothrow_move_constructible_v<T>)
+        explicit constexpr attr_impl(value_type&&value) noexcept(std::is_nothrow_move_constructible_v<T>)
             : BaseType(std::move(value)) {
         }
 
-        attr(const attr&other) : BaseType() {
+        attr_impl(const attr_impl&other) : BaseType() {
             setter(this->val, other._get());
         }
 
-        attr(attr&&other) noexcept : BaseType() {
+        attr_impl(attr_impl&&other) noexcept : BaseType() {
             setter(this->val, std::move(other.val));
         }
 
         template<typename... Args>
-        constexpr explicit attr(std::in_place_t, Args&&... args) : BaseType(std::in_place, std::forward<Args>(args)...) {
+        constexpr explicit attr_impl(std::in_place_t, Args&&... args) : BaseType(std::in_place, std::forward<Args>(args)...) {
         }
 
         template<typename U = value_type>
             requires AttrConstructible<T, U>
-        constexpr explicit attr(U&&value)
+        constexpr explicit attr_impl(U&&value)
             : BaseType(std::in_place, std::forward<U>(value)) {
         }
 
-        inline attr& operator=(const attr&other) {
+        inline attr_impl& operator=(const attr_impl&other) {
             setter(this->val, other._get());
             return *this;
         }
 
-        inline attr& operator=(attr&&other) noexcept(std::is_nothrow_move_assignable_v<value_type> &&
+        inline attr_impl& operator=(attr_impl&&other) noexcept(std::is_nothrow_move_assignable_v<value_type> &&
                                                      std::is_nothrow_move_constructible_v<value_type>) {
             setter(this->val, std::move(other.val));
             return *this;
@@ -191,12 +191,12 @@ namespace touka {
 
         template<class U>
             requires std::same_as<std::decay_t<U>, T>
-        inline attr& operator=(U&&u) {
-            setter(this->val, std::move(std::forward<U>(u)));
+        inline attr_impl& operator=(U&&u) {
+            _setter(this->val, std::move(std::forward<U>(u)));
             return *this;
         }
 
-        inline void swap(attr&other)
+        inline void swap(attr_impl&other)
             noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_swappable_v<T>) {
             using std::swap;
             auto tmp = _get();
@@ -206,7 +206,7 @@ namespace touka {
 
         operator T() const { return _get(); }
 
-        constexpr std::strong_ordering operator<=>(const attr&rhs) const {
+        constexpr std::strong_ordering operator<=>(const attr_impl&rhs) const {
             return _get() <=> rhs._get();
         }
 
@@ -214,7 +214,7 @@ namespace touka {
             return _get() <=> value;
         }
 
-        constexpr bool operator==(const attr&rhs) const {
+        constexpr bool operator==(const attr_impl&rhs) const {
             return _get() == rhs._get();
         }
 
@@ -223,7 +223,7 @@ namespace touka {
         }
 
         class ValueGetter {
-            friend class attr;
+            friend class attr_impl;
 
         protected:
             GetterType getter;
@@ -241,7 +241,7 @@ namespace touka {
         };
 
         class ValueSetter {
-            friend class attr;
+            friend class attr_impl;
 
         protected:
             SetterType setter;
@@ -259,8 +259,8 @@ namespace touka {
 
     private:
 
-        ValueGetter getter;
-        ValueSetter setter;
+        ValueGetter _getter;
+        ValueSetter _setter;
 
         template<class... Args>
         inline void construct_value(Args&&... args) {
@@ -275,41 +275,46 @@ namespace touka {
             return std::bit_cast<T *>(std::addressof(val));
         }
 
-        constexpr value_type _get() const noexcept { return getter(this->val); }
+        constexpr value_type _get() const noexcept { return _getter(this->val); }
     };
 
     template<class T>
-    inline constexpr bool operator==(const attr<T>&lhs, const attr<T>&rhs) {
+    inline constexpr bool operator==(const attr_impl<T>&lhs, const attr_impl<T>&rhs) {
         return lhs == rhs;
     }
 
     template<class T>
-    inline constexpr auto operator<=>(const attr<T>&lhs, const attr<T>&rhs) {
+    inline constexpr auto operator<=>(const attr_impl<T>&lhs, const attr_impl<T>&rhs) {
         return lhs <=> rhs;
     }
 
     template<class T>
-    constexpr auto operator<=>(const T&value, const attr<T>&opt) {
+    constexpr auto operator<=>(const T&value, const attr_impl<T>&opt) {
         return value <=> opt;
     }
 
     template<class T>
-    constexpr bool operator==(const T&value, const attr<T>&opt) {
+    constexpr bool operator==(const T&value, const attr_impl<T>&opt) {
         return value == opt;
     }
 
     template<class Tp>
     inline constexpr std::enable_if_t<std::is_move_constructible_v<Tp> && std::is_swappable_v<Tp>, void>
-    swap(attr<Tp>&lhs, attr<Tp>&rhs) noexcept(noexcept(lhs.swap(rhs))) {
+    swap(attr_impl<Tp>&lhs, attr_impl<Tp>&rhs) noexcept(noexcept(lhs.swap(rhs))) {
         lhs.swap(rhs);
     }
+
+    template<typename T, auto Getter, auto Setter>
+    using attr = attr_impl<T,
+                std::decay_t<decltype(Getter)>,
+                std::decay_t<decltype(Setter)>>;
 
 }
 
 namespace std {
     template<class T>
-    struct hash<std::__enable_hash_helper<touka::attr<T>, remove_const_t<T>>> {
-        size_t operator()(const touka::attr<T>&attr) const noexcept {
+    struct hash<std::__enable_hash_helper<touka::attr_impl<T>, remove_const_t<T>>> {
+        size_t operator()(const touka::attr_impl<T>&attr) const noexcept {
             return hash<std::remove_const_t<T>>()(attr._get());
         }
     };
