@@ -20,18 +20,6 @@ namespace touka {
         { std::invoke(std::forward<Fn>(fn), value, new_value) };
     };
 
-    enum class AccessSpecifiers : uint8_t {
-        Public = 0,
-        Private,
-    };
-
-    template<typename Getter>
-    struct make_getter {
-        auto operator()(Getter&&g, AccessSpecifiers access = AccessSpecifiers::Public) {
-            return std::tuple{std::forward<Getter>(g), std::move(access)};
-        }
-    };
-
     template<typename value_type>
     struct default_getter {
         inline decltype(auto) operator()(value_type&& val) const & {
@@ -69,9 +57,7 @@ namespace touka {
 
     template<typename T,
         typename Getter = default_getter<T>,
-        typename Setter = default_setter<T>,
-        AccessSpecifiers GetterAccess = AccessSpecifiers::Public,
-        AccessSpecifiers SetterAccess = AccessSpecifiers::Public>
+        typename Setter = default_setter<T>>
     requires GetterFn<Getter, T> && SetterFn<Setter, T>
     class attr;
 
@@ -148,10 +134,7 @@ namespace touka {
             !std::same_as<std::remove_cvref_t<U>, attr<T>>;
 
 
-    template<typename T, typename Getter,
-            typename Setter,
-            AccessSpecifiers GetterAccess,
-            AccessSpecifiers SetterAccess>
+    template<typename T, typename Getter, typename Setter>
     requires GetterFn<Getter, T> && SetterFn<Setter, T>
     class attr : private Internal::attr_storage<std::remove_cv_t<T>> {
         using BaseType = Internal::attr_storage<std::remove_cv_t<T>>;
@@ -174,10 +157,6 @@ namespace touka {
         }
 
         explicit constexpr attr(value_type&&value) noexcept(std::is_nothrow_move_constructible_v<T>)
-            : BaseType(std::move(value)) {
-        }
-
-        explicit constexpr attr(value_type&&value, make_getter<Getter>&&getter) noexcept(std::is_nothrow_move_constructible_v<T>)
             : BaseType(std::move(value)) {
         }
 
@@ -217,11 +196,13 @@ namespace touka {
             return *this;
         }
 
-        // inline void swap(attr&other)
-        //     noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_swappable_v<T>) {
-        //     using std::swap;
-        //     swap(_get(), other._get());
-        // }
+        inline void swap(attr&other)
+            noexcept(std::is_nothrow_move_constructible_v<T> && std::is_nothrow_swappable_v<T>) {
+            using std::swap;
+            auto tmp = _get();
+            setter(this->val, other._get());
+            other.setter(other.val, tmp);
+        }
 
         operator T() const { return _get(); }
 
