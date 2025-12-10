@@ -500,6 +500,54 @@ TEST_CASE("Property const correctness", "[property]") {
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
+// Template-based property definition test
+// ═══════════════════════════════════════════════════════════════════════════
+
+class TemplatePropertyOwner {
+private:
+    int x_ = 0;
+    int y_ = 0;
+
+public:
+    int getX() const { return x_; }
+    void setX(int v) { x_ = v; }
+
+    int getY() const { return y_; }
+    void setY(int v) { y_ = v; }
+
+    // Define property descriptors using templates
+    using x_desc = touka::Property<TemplatePropertyOwner, int, &TemplatePropertyOwner::getX, &TemplatePropertyOwner::setX>;
+    using y_desc = touka::Property<TemplatePropertyOwner, int, &TemplatePropertyOwner::getY, &TemplatePropertyOwner::setY>;
+
+    // Use template-based property definition
+    TOUKA_PROPERTY_DEF(x, x_desc);
+    TOUKA_PROPERTY_DEF(y, y_desc);
+};
+
+TEST_CASE("Template-based property definition", "[property][template]") {
+    TemplatePropertyOwner obj;
+
+    SECTION("Read and write via template-defined property") {
+        obj.x = 100;
+        obj.y = 200;
+
+        REQUIRE(obj.x == 100);
+        REQUIRE(obj.y == 200);
+    }
+
+    SECTION("Compound assignment") {
+        obj.x = 10;
+        obj.x += 5;
+        REQUIRE(obj.x == 15);
+    }
+
+    SECTION("Zero overhead verification") {
+        // Should be same size as two ints
+        REQUIRE(sizeof(TemplatePropertyOwner) <= sizeof(int) * 2 + alignof(int));
+    }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // Derived class test
 // ═══════════════════════════════════════════════════════════════════════════
 
