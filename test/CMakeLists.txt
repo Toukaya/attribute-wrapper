@@ -18,6 +18,17 @@ enable_testing()
 
 find_package(Catch2 3 REQUIRED)
 
-add_executable(test attr_test.cpp
-        ../include/attr/optional.hpp)
-target_link_libraries(test PRIVATE Catch2::Catch2WithMain attr)
+# Original attr tests
+add_executable(attr_test attr_test.cpp
+        ../include/attr/attr.hpp)
+target_link_libraries(attr_test PRIVATE Catch2::Catch2WithMain attr)
+
+# New property tests
+add_executable(property_test property_test.cpp
+        ../include/attr/property.hpp)
+target_link_libraries(property_test PRIVATE Catch2::Catch2WithMain attr)
+
+# Register tests with CTest
+include(Catch)
+catch_discover_tests(attr_test)
+catch_discover_tests(property_test)
